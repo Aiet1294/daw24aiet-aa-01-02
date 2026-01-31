@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use OpenAI;
+use GuzzleHttp\Client;
 
 class TranslatorController extends Controller
 {
@@ -46,7 +47,12 @@ class TranslatorController extends Controller
                 throw new \Exception('OPENAI_API_KEY falta da ingurune aldagaian.');
             }
             
-            $client = OpenAI::client($apiKey);
+            $client = OpenAI::factory()
+                ->withApiKey($apiKey)
+                ->withHttpClient(new Client(['verify' => false])) 
+                ->make();
+
+            //$client = OpenAI::client($apiKey);
 
             $result = $client->chat()->create([
                 'model' => 'gpt-4o',
@@ -55,6 +61,15 @@ class TranslatorController extends Controller
                     ['role' => 'user', 'content' => $text],
                 ],
             ]);
+
+            if (!isset($result->choices) || empty($result->choices)) {
+                
+                $errorDetails = json_encode($result);
+                if (isset($result['error']['message'])) {
+                    $errorDetails = $result['error']['message'];
+                }
+                throw new \Exception('La API no devolvió una traducción válida. Detalles: ' . $errorDetails);
+            }
 
             $translationContent = $result->choices[0]->message->content;
             $translation = nl2br(htmlspecialchars($translationContent));
